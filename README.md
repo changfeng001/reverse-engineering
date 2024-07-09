@@ -1,2 +1,2 @@
 # Reverse Engineering
-For studing reverse engineering
+For studing reverse engineering.
