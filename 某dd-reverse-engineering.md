@@ -1,8 +1,9 @@
- # 某DD提权代码逆向分析
+  # Reverse engineering of PDD privilege escalation code
 
-某DD对几大厂商手机的提权代码类似，都是使用了WorkSource的反序列化漏洞，因此，这里以Oppo的提权代码为例，简要分析流程。
-## 逻辑梳理
-- com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup.OppoAlivePullStartup，该类是oppo机型提权代码所在的类，它继承了com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup.CommonAlivePullStartUp，而CommonAlivePullStartUp又依次继承com.xunmeng.pinduoduo.alive.base.ability.impl.provider.oppoLauncher.OppoLauncherProviderImpl、com.xunmeng.pinduoduo.alive.base.ability.interfaces.provider.BaseBizProviderImpl（BaseBizProviderImpl在拼多多主App中实现，可参考version 6.44），BaseBizProviderImpl实现了com.xunmeng.pinduoduo.alive.base.ability.interfaces.provider.IBizProvider：
+PDD's privilege escalation code for mobile phones from several major manufacturers is similar. They all use WorkSource's deserialization vulnerability. Therefore, here we take Oppo's privilege escalation code as an example to briefly analyze the process.
+
+## Logical sorting
+- com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup.OppoAlivePullStartup, this class is the class where the oppo model privilege escalation code is located. It inherits com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup.CommonAlivePullStartUp, and CommonAlivePullStartUp in turn inherits com.xunmeng.pinduoduo .alive.base.ability.impl.provider.oppoLauncher.OppoLauncherProviderImpl, com.xunmeng.pinduoduo.alive.base.ability.interfaces.provider.BaseBizProviderImpl (BaseBizProviderImpl is implemented in Pinduoduo main App, please refer to version 6.44), BaseBizProviderImpl implementation com.xunmeng.pinduoduo.alive.base.ability.interfaces.provider.IBizProvider:
 ```java
     package com.xunmeng.pinduoduo.alive.base.ability.interfaces.provider;
     
@@ -11,10 +12,10 @@
     }
 ```
 
-    IBizProvider接口类的代码只包含一个方法 hasPermission()。
+    The code of the IBizProvider interface class contains only one method hasPermission().
     
-    CommonAlivePullStartUp类中有一部分提权代码，是Android SDK各个level 都要用的，包括31。
-    CommonAlivePullStartUp类中有intParcelClzMap()、initFuncMap()方法，initFuncMap()方法是用于构造提权bundle的，提权bundle中存放了类OppoLauncherProviderImpl的对象，该对象应该是OppoLauncherProviderImpl实现了Function接口类之后生成的一个对象：
+    There is some privilege escalation code in the CommonAlivePullStartUp class, which is used by all levels of the Android SDK, including 31.
+    There are intParcelClzMap() and initFuncMap() methods in the CommonAlivePullStartUp class. The initFuncMap() method is used to construct the privilege escalation bundle. The privilege escalation bundle stores an object of class OppoLauncherProviderImpl. This object should be generated after OppoLauncherProviderImpl implements the Function interface class. an object:
 ```java
     public void initFuncMap() {
             this.sFuncMakeBundleMap.put("android.os.WorkSource", new OppoLauncherProviderImpl() { // from class: com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup.CommonAlivePullStartUp.1
@@ -24,7 +25,7 @@
             });
         }
 ```  
-    各家厂商的提权代码都继承了CommonAlivePullStartUp类，而且实现了自己的intParcelClzMap()、initFuncMap()方法：
+    Each manufacturer's privilege escalation code inherits the CommonAlivePullStartUp class and implements its own intParcelClzMap() and initFuncMap() methods:
 ```java
     /* JADX INFO: Access modifiers changed from: protected */
         @Override // com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup.CommonAlivePullStartUp
@@ -60,7 +61,7 @@
         }
 ```
     
-    其中，Function接口类的代码如下：
+    Among them, the code of the Function interface class is as follows:
 ```java
     package com.xunmeng.pinduoduo.android_pull_ability_comp.pullstartup;
     
@@ -71,7 +72,7 @@
         Bundle makeBundle(Intent intent);
     }
 ```   
-- 继续往上梳理，AlivePullStartUpImpl 类中有 makeBundle(Intent intent) 方法，该方法是通过 this.mMakeBundleFunction 属性调用其中的 makeBundle(Intent intent) 方法（即 Function 接口类的 makeBundle(Intent intent) 方法，该方法的实现在XXAlivePullStartup类的 initFuncMap() 方法中，它即是传入一个 intent 来写入漏洞提权所用的bundle），这里很关键，上层利用漏洞时应该要调用 AlivePullStartUpImpl 的 makeBundle(Intent intent) 方法来获取一个利用漏洞的bundle：
+- Continuing to sort it out, there is a makeBundle(Intent intent) method in the AlivePullStartUpImpl class. This method calls the makeBundle(Intent intent) method through the this.mMakeBundleFunction property (that is, the makeBundle(Intent intent) method of the Function interface class. The implementation of this method In the initFuncMap() method of the XXAlivePullStartup class, it passes in an intent to write the bundle used for vulnerability privilege escalation). This is very important. When the upper layer exploits the vulnerability, it should call the makeBundle(Intent intent) method of AlivePullStartUpImpl to obtain an Bundle to exploit the vulnerability:
 ```java   
     public Bundle makeBundle(Intent intent) {
             if (intent == null) {
@@ -88,7 +89,7 @@
         }
 ```    
     
-    AlivePullStartUpImpl 类中还有 startAccount(Intent intent) 方法，并通过该方法来调用 realStartAccount(Intent intent) 方法，这两个方法是将构造的反序列化漏洞代码送入AMS，完成提权：
+    There is also a startAccount(Intent intent) method in the AlivePullStartUpImpl class, and the realStartAccount(Intent intent) method is called through this method. These two methods are to send the constructed deserialization vulnerability code to AMS to complete the privilege escalation:
 ```java
     private boolean realStartAccount(Intent intent) {
             Logger.i("SpecialPullAbility.Comp", "real start accountSettings activity.");
@@ -102,7 +103,7 @@
             }
     }
 ```  
-- 从类 AlivePullStartUpImpl 再往上，就是类：com.xunmeng.pinduoduo.alive.base.ability.comp.Main，这是提权漏洞使用的上层类，在该类中创建一个 AlivePullStartUpImpl 对象，用于完成提权操作：
+- Going up from class AlivePullStartUpImpl is the class: com.xunmeng.pinduoduo.alive.base.ability.comp.Main, which is the upper-level class used by privilege escalation vulnerabilities. Create an AlivePullStartUpImpl object in this class to complete privilege escalation. operate:
 ```java    
     public class Main {
         private static final String TAG = null;
@@ -158,10 +159,11 @@
         }
     }
 ```
-## 可能的问题
-- 在构造提权的bundle时，可能会报出如下错误：
+## Possible problems
+- When constructing a privilege-elevated bundle, the following error may be reported:
  ```
  java.lang.IllegalStateException: Bad magic number for Bundle: 0x444e4c42
 ```
-这是由于jadx反编译某DD代码出错，将bundle的magic number搞错了，这里应该改成0x4C444E42即可解决。
-#### 声明：此处分析仅供学习参考，严禁违法使用，否则后果由违法使用者自行承担！
+This is due to an error in jadx decompiling the PDD code, and the magic number of the bundle is wrong. It should be changed to 0x4C444E42 to solve the problem.
+
+Statement: The analysis here is for learning reference only. Illegal use is strictly prohibited, otherwise the illegal users will be responsible for the consequences!
