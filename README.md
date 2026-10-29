@@ -1,3 +1,3 @@
 # Reverse Engineering
 
-For studing reverse engineering only.
+For studying reverse engineering only.
